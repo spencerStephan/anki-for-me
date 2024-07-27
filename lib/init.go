@@ -10,14 +10,14 @@ import (
 )
 
 type InitParams struct {
-	ConfigExists bool
+	ConfigDirPath string
+	ConfigExists  bool
 }
 
-func (p *InitParams) CheckIfConfigExists() error {
+func (p *InitParams) SetConfigDirPath() error {
 	operatingSystem := runtime.GOOS
 	homeDir, err := os.UserHomeDir()
-	const FOLDER_NAME = "wofi"
-	var configFilePath string
+	const FOLDER_NAME = "anki-for-me"
 
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %w", err)
@@ -26,14 +26,18 @@ func (p *InitParams) CheckIfConfigExists() error {
 	case "linux":
 		configDirName := ".config"
 		configDirPath := filepath.Join(homeDir, configDirName)
-		configFilePath = filepath.Join(configDirPath, FOLDER_NAME)
+		p.ConfigDirPath = filepath.Join(configDirPath, FOLDER_NAME)
+		return nil
 	case "darwin":
-		configFilePath = filepath.Join(homeDir, FOLDER_NAME)
+		p.ConfigDirPath = filepath.Join(homeDir, FOLDER_NAME)
+		return nil
 	default:
 		return errors.New("please use either Linux or MacOS")
 	}
+}
 
-	_, err = os.Stat(configFilePath)
+func (p *InitParams) SetConfigExists(s string) error {
+	_, err := os.Stat(s)
 	if err == nil {
 		p.ConfigExists = true
 		return nil // File exists
@@ -46,9 +50,15 @@ func (p *InitParams) CheckIfConfigExists() error {
 
 func StartProgram() *InitParams {
 	params := &InitParams{
-		ConfigExists: false,
+		ConfigExists:  false,
+		ConfigDirPath: "",
 	}
-	if err := params.CheckIfConfigExists(); err != nil {
+
+	if err := params.SetConfigDirPath(); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := params.SetConfigExists(params.ConfigDirPath); err != nil {
 		log.Fatal(err)
 	}
 	return params
