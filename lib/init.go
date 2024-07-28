@@ -1,12 +1,12 @@
 package lib
 
-type InitService struct {
-	Config Config
+type Services struct {
+	Config *UserConfig
 	DB     Database
 }
 
-func NewInitService(config UserConfig, db Sqlite) *InitService {
-	return &InitService{
+func InitServices(config *UserConfig, db *Sqlite) *Services {
+	return &Services{
 		Config: config,
 		DB:     db,
 	}
