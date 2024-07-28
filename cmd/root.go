@@ -2,9 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spencerStephan/anki-for-me/lib"
-	"os"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -15,11 +12,6 @@ var rootCmd = &cobra.Command{
 	Short:   "A CLI tool for memorizing things you've learned.",
 	Long:    "An interactive TUI that helps you learn by using techniques such as spaced repetition.",
 	Run: func(cmd *cobra.Command, args []string) {
-		params := lib.StartProgram()
-		if params.ConfigExists != true {
-			fmt.Println("Cannot find configuration, please run afm init or anki-for-me init to get started.")
-			os.Exit(1)
-		}
 	},
 }
 
