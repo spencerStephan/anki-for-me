@@ -71,26 +71,57 @@ func CreateFile(parentDir string) {
 	}
 }
 
-func SaveConfig(path string) {
+func SaveConfig(userInputtedPath string) {
 	dir := GetDir(true)
-	for i := 0; i < len(dir.Files); i++ {
-		if strings.Contains(dir.Files[i].Name(), "config.yaml") {
-			oldConfig := filepath.Join(dir.Path, "old.config.yaml")
-			_, err := os.Stat(oldConfig)
-			if err == nil {
-				os.Remove(oldConfig)
-			}
-			old := filepath.Join(dir.Path, "config.yaml")
-			new := filepath.Join(dir.Path, "old.config.yaml")
-			os.Rename(old, new)
-			file, err := os.Stat(path)
-			if err == nil && !file.IsDir() {
-				os.Rename(path, old)
-			} else {
-				log.Fatal("cannot open config file, no file exists with this name")
-			}
+	userPathAlreadyExists := checkIfUserInputtedConfigPathExists(userInputtedPath)
+	if userPathAlreadyExists && strings.Contains(userInputtedPath, "/config.yaml") {
+		return
+	}
+
+	targetConfigPath := filepath.Join(dir.Path, "config.yaml")
+	configFileExists := checkIfConfigFileExists(targetConfigPath)
+
+	if !configFileExists {
+		moveAndRenameConfigFile(userInputtedPath, targetConfigPath)
+		return
+	}
+
+	archivePreviousConfig(targetConfigPath, dir)
+	replaceConfig(userInputtedPath, targetConfigPath)
+}
+
+func checkIfConfigFileExists(defaultConfigPath string) bool {
+	_, err := os.Stat(defaultConfigPath)
+	return err == nil
+}
+
+func checkIfUserInputtedConfigPathExists(userInputtedPath string) bool {
+	_, err := os.Stat(userInputtedPath)
+	return err == nil
+}
+
+func archivePreviousConfig(targetConfigPath string, dir Directory) {
+	// check if backup file already exists
+	backupFilePath := filepath.Join(dir.Path, "config.bak.yaml")
+	_, err := os.Stat(backupFilePath)
+	if err == nil {
+		err = os.Remove(backupFilePath)
+		if err != nil {
+			log.Fatal("there was an unexpected error removing the backup file")
 		}
 	}
+	os.Rename(targetConfigPath, filepath.Join(backupFilePath))
+}
+
+func replaceConfig(userInputtedPath string, targetConfigPath string) {
+	err := os.Rename(userInputtedPath, targetConfigPath)
+	if err != nil {
+		log.Fatal("there was an unexpected probleming replacing your config file.")
+	}
+}
+
+func moveAndRenameConfigFile(userInputtedPath string, targetConfigPath string) {
+	os.Rename(userInputtedPath, targetConfigPath)
 }
 
 func NewConfig() Config {
