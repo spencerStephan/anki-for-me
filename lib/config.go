@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 type Directory struct {
@@ -14,11 +15,13 @@ type Directory struct {
 	Files []fs.DirEntry
 }
 
-type UserConfig struct {
-	Directory *Directory
+type Config struct {
+	Directory Directory
 }
 
-func (c *UserConfig) GetDir() {
+var UserConfig Config
+
+func GetDir(savingConfig bool) Directory {
 	operatingSystem := runtime.GOOS
 	var configDir []fs.DirEntry
 	var configDirPath string
@@ -37,37 +40,60 @@ func (c *UserConfig) GetDir() {
 		configDir, err = os.ReadDir(configDirPath)
 		if err != nil {
 			fmt.Println("No config directory found, creating...")
-			c.CreateDir(configDirPath)
+			CreateDir(configDirPath)
 		}
-		_, err = os.Stat(filepath.Join(configDirPath, "config.yaml"))
-		if err != nil {
 
-			fmt.Println("No config file found, creating...")
-			c.CreateFile(configDirPath)
+		if !savingConfig {
+			_, err = os.Stat(filepath.Join(configDirPath, "config.yaml"))
+			if err != nil {
+
+				fmt.Println("No config file found, creating...")
+				CreateFile(configDirPath)
+			}
 		}
+
+		UserConfig.Directory = Directory{Files: configDir, Path: configDirPath}
 	}
-
-	c.Directory = &Directory{Files: configDir, Path: configDirPath}
+	return UserConfig.Directory
 }
 
-func (c *UserConfig) CreateDir(parentDir string) {
+func CreateDir(parentDir string) {
 	err := os.Mkdir(parentDir, 0755)
 	if err != nil {
 		log.Fatalf("failed to create config dir: %v", err)
 	}
 }
 
-func (c *UserConfig) CreateFile(parentDir string) {
+func CreateFile(parentDir string) {
 	_, err := os.Create(filepath.Join(parentDir, "config.yaml"))
 	if err != nil {
 		log.Fatal("failed to create config file")
 	}
 }
 
-func NewConfig() *UserConfig {
-	config := &UserConfig{
-		Directory: nil,
+func SaveConfig(path string) {
+	dir := GetDir(true)
+	for i := 0; i < len(dir.Files); i++ {
+		if strings.Contains(dir.Files[i].Name(), "config.yaml") {
+			oldConfig := filepath.Join(dir.Path, "old.config.yaml")
+			_, err := os.Stat(oldConfig)
+			if err == nil {
+				os.Remove(oldConfig)
+			}
+			old := filepath.Join(dir.Path, "config.yaml")
+			new := filepath.Join(dir.Path, "old.config.yaml")
+			os.Rename(old, new)
+			file, err := os.Stat(path)
+			if err == nil && !file.IsDir() {
+				os.Rename(path, old)
+			} else {
+				log.Fatal("cannot open config file, no file exists with this name")
+			}
+		}
 	}
-	config.GetDir()
-	return config
+}
+
+func NewConfig() Config {
+	GetDir(false)
+	return UserConfig
 }
