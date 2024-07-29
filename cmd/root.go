@@ -28,6 +28,13 @@ var rootCmd = &cobra.Command{
 		if cfgFile != "" {
 			viperReadType = "flag"
 			viper.SetConfigFile(cfgFile)
+
+			if configIsSaved {
+				lib.SaveConfig(cfgFile)
+				viper.SetConfigType("yaml")
+				viper.SetConfigName("config")
+				viper.AddConfigPath("$HOME/.config/anki-for-me")
+			}
 		} else {
 			viperReadType = "automatic"
 			viper.SetConfigType("yaml")
@@ -41,7 +48,7 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			switch viperReadType {
 			case "flag":
-				log.Fatal("Invalid file type, must be YAML format.")
+				log.Fatal("Invalid file, file must exist and be in YAML format.")
 			case "automatic":
 				if !strings.Contains(cmd.Name(), "init") {
 					log.Fatal("Please run anki-for-me init to initialize your config or pass in a config file using --config.")
@@ -52,8 +59,9 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	cfgFile string
-	sqlFile string
+	cfgFile       string
+	sqlFile       string
+	configIsSaved bool
 )
 
 func Execute() error {
@@ -61,5 +69,6 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/anki-for-me/config.yaml")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/anki-for-me/config.yaml")
+	rootCmd.PersistentFlags().BoolVarP(&configIsSaved, "save", "s", false, "Using this flag will override your config file with the one you entered using --config")
 }
