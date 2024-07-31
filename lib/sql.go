@@ -12,8 +12,8 @@ import (
 )
 
 type Database interface {
-	Exists(Directory) bool
-	Create(Directory) error
+	SqlExists(*ConfigDir) bool
+	Create(*ConfigDir) error
 	Connect(string) (*Sqlite, error)
 	Close()
 	// Delete() error
@@ -25,13 +25,13 @@ type Sqlite struct {
 	Connection *sql.DB
 }
 
-func (s *Sqlite) Exists(d Directory) bool {
+func (s *Sqlite) SqlExists(d *ConfigDir) bool {
 	filename := filepath.Join(d.Path, "collections.db")
 	_, err := os.Stat(filename)
 	return err == nil
 }
 
-func (s *Sqlite) Create(d Directory) error {
+func (s *Sqlite) Create(d *ConfigDir) error {
 	_, err := os.Create(path.Join(d.Path, "collections.db"))
 	return err
 }
@@ -55,11 +55,11 @@ func (s *Sqlite) Close() {
 	}
 }
 
-func NewSqlite(d Directory) (*Sqlite, error) {
+func NewSqlite(d *ConfigDir) (*Sqlite, error) {
 	sqlite := &Sqlite{
 		nil,
 	}
-	exists := sqlite.Exists(d)
+	exists := sqlite.SqlExists(d)
 
 	if !exists {
 		err := sqlite.Create(d)

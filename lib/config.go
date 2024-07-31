@@ -2,106 +2,171 @@ package lib
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 )
 
-type Directory struct {
-	Path  string
-	Files []fs.DirEntry
+type Conf struct {
+	Dir  *ConfigDir
+	File *ConfigFile
 }
 
-type Config struct {
-	Directory Directory
+type ConfigDir struct {
+	Path   string
+	Dir    []fs.DirEntry
+	Exists bool
 }
 
-var UserConfig Config
+type ConfigFile struct {
+	File   fs.FileInfo
+	Path   string
+	Exists bool
+}
 
-func GetDir(savingConfig bool) Directory {
+var (
+	homeDir               = getUserHomeDir()
+	defaultConfigDirPath  = filepath.Join(homeDir, configDirName, folderName)
+	defaultConfigFilePath = filepath.Join(homeDir, configDirName, folderName, "config.yaml")
+)
+
+const (
+	configDirName = ".config"
+	folderName    = "anki-for-me"
+)
+
+func getUserHomeDir() string {
 	operatingSystem := runtime.GOOS
-	var configDir []fs.DirEntry
-	var configDirPath string
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatalf("failed to get user home dir: %v", err)
+		log.Fatalf("failed to get user home Dir: %v", err)
 	}
-	const folderName = "anki-for-me"
 
-	switch operatingSystem {
-	case "windows":
-		log.Fatalf("Windows is not supported, please use either Linux of MacOS")
-	default:
-		configDirName := ".config"
-		configDirPath = filepath.Join(homeDir, configDirName, folderName)
-		configDir, err = os.ReadDir(configDirPath)
-		if err != nil {
-			fmt.Println("No config directory found, creating...")
-			CreateDir(configDirPath)
-		}
-
-		if !savingConfig {
-			_, err = os.Stat(filepath.Join(configDirPath, "config.yaml"))
-			if err != nil {
-
-				fmt.Println("No config file found, creating...")
-				CreateFile(configDirPath)
-			}
-		}
-
-		UserConfig.Directory = Directory{Files: configDir, Path: configDirPath}
+	if operatingSystem == "windows" {
+		log.Fatalln("Windows is not supported, please use either Linux of MacOS")
 	}
-	return UserConfig.Directory
+	return homeDir
 }
 
-func CreateDir(parentDir string) {
-	err := os.Mkdir(parentDir, 0755)
+func (d *ConfigDir) DirExists() bool {
+	return d.Exists
+}
+
+func (f *ConfigFile) FileExists() bool {
+	return f.Exists
+}
+
+func (d *ConfigDir) GetDir(isInit bool) {
+	configDirPath := filepath.Join(homeDir, configDirName, folderName)
+	dir, err := os.ReadDir(configDirPath)
+	if err != nil {
+		if isInit {
+			d.Exists = false
+			return
+		}
+		log.Fatal("Config directory not found, please run anki-for-me init to create one.")
+	}
+
+	d.Exists = true
+	d.Path = configDirPath
+	d.Dir = dir
+}
+
+func CreateConfigDir(newDir *ConfigDir) *ConfigDir {
+	newDir.GetDir(true)
+	configDirPath := filepath.Join(homeDir, configDirName, folderName)
+
+	err := os.Mkdir(configDirPath, 0755)
 	if err != nil {
 		log.Fatalf("failed to create config dir: %v", err)
 	}
-}
-
-func CreateFile(parentDir string) {
-	_, err := os.Create(filepath.Join(parentDir, "config.yaml"))
+	dir, err := os.ReadDir(configDirPath)
 	if err != nil {
-		log.Fatal("failed to create config file")
+		log.Fatalf("failed to read newly created config Dir: %v \n", err)
 	}
+	newDir.Dir = dir
+	newDir.Exists = true
+	newDir.Path = configDirPath
+	return newDir
 }
 
-func SaveConfig(userInputtedPath string) {
-	dir := GetDir(true)
-	userPathAlreadyExists := checkIfUserInputtedConfigPathExists(userInputtedPath)
-	if userPathAlreadyExists && strings.Contains(userInputtedPath, "/config.yaml") {
+func (f *ConfigFile) GetFile(isInit bool, Dir *ConfigDir) {
+	configFilePath := filepath.Join(Dir.Path, "config.yaml")
+	file, err := os.Stat(configFilePath)
+	if err != nil {
+		if isInit {
+			f.Exists = false
+			return
+		}
+		log.Fatal("Config file not found, please run anki-for-me init to create one.")
+	}
+	f.Path = configFilePath
+	f.Exists = true
+	f.File = file
+}
+
+func CreateConfigFile(Dir *ConfigDir) *ConfigFile {
+	fp := filepath.Join(Dir.Path, "config.yaml")
+	file, err := os.Create(fp)
+	if err != nil {
+		log.Fatalf("failed to create config file: %v", err)
+	}
+	if err != nil {
+		log.Fatalf("failed to create config file: %v", err)
+	}
+	newFile, _ := os.Stat(fp)
+
+	return &ConfigFile{Path: file.Name(), Exists: true, File: newFile}
+}
+
+func OverrideConfigFile(overridePath string) {
+	currentConf := InitConfig()
+	_, err := os.Stat(overridePath)
+	if err != nil {
+		log.Fatalln("Invalid file, file must exist and be in YAML format.")
+	}
+	currentConfExists := CheckIfConfigFileExists(defaultConfigDirPath)
+
+	if overridePath == defaultConfigFilePath {
+		fmt.Println("Your selected configuration file is the default one, skipping...")
 		return
 	}
 
-	targetConfigPath := filepath.Join(dir.Path, "config.yaml")
-	configFileExists := checkIfConfigFileExists(targetConfigPath)
-
-	if !configFileExists {
-		moveAndRenameConfigFile(userInputtedPath, targetConfigPath)
+	if !currentConfExists {
+		createFile(defaultConfigDirPath, overridePath)
 		return
 	}
-
-	archivePreviousConfig(targetConfigPath, dir)
-	replaceConfig(userInputtedPath, targetConfigPath)
+	ArchivePreviousConfig(currentConf.Dir)
+	ReplaceConfig(overridePath)
+	fmt.Printf("Success! Set new default config file. Located at %s\n", defaultConfigFilePath)
 }
 
-func checkIfConfigFileExists(defaultConfigPath string) bool {
-	_, err := os.Stat(defaultConfigPath)
+func CheckIfConfigFileExists(overridePath string) bool {
+	_, err := os.Stat(defaultConfigDirPath)
 	return err == nil
 }
 
-func checkIfUserInputtedConfigPathExists(userInputtedPath string) bool {
-	_, err := os.Stat(userInputtedPath)
-	return err == nil
+func createFile(parentDir string, overridePath string) {
+	destFile, err := os.Create(parentDir)
+	if err != nil {
+		log.Fatalln("failed to create config file")
+	}
+	sourceFile, err := os.Open(overridePath)
+	if err != nil {
+		log.Fatalln("failed to read override file")
+	}
+	defer sourceFile.Close()
+	defer destFile.Close()
+	_, err = io.Copy(destFile, sourceFile)
+	if err != nil {
+		log.Fatalln("failed to copy file")
+	}
 }
 
-func archivePreviousConfig(targetConfigPath string, dir Directory) {
-	// check if backup file already exists
+func ArchivePreviousConfig(dir *ConfigDir) {
 	backupFilePath := filepath.Join(dir.Path, "config.bak.yaml")
 	_, err := os.Stat(backupFilePath)
 	if err == nil {
@@ -110,21 +175,12 @@ func archivePreviousConfig(targetConfigPath string, dir Directory) {
 			log.Fatal("there was an unexpected error removing the backup file")
 		}
 	}
-	os.Rename(targetConfigPath, filepath.Join(backupFilePath))
+	os.Rename(defaultConfigFilePath, filepath.Join(backupFilePath))
 }
 
-func replaceConfig(userInputtedPath string, targetConfigPath string) {
-	err := os.Rename(userInputtedPath, targetConfigPath)
+func ReplaceConfig(userInputtedPath string) {
+	err := os.Rename(userInputtedPath, defaultConfigFilePath)
 	if err != nil {
-		log.Fatal("there was an unexpected probleming replacing your config file.")
+		log.Fatal("there was an unexpected problem replacing your config file.")
 	}
-}
-
-func moveAndRenameConfigFile(userInputtedPath string, targetConfigPath string) {
-	os.Rename(userInputtedPath, targetConfigPath)
-}
-
-func NewConfig() Config {
-	GetDir(false)
-	return UserConfig
 }

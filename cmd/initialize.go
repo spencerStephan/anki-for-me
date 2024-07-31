@@ -14,6 +14,6 @@ var initializeCmd = &cobra.Command{
 	Short: "Set up Anki-for-me to work on your system",
 	Long:  "Enable your database and set up your user defaults for Anki-for-me to work properly",
 	Run: func(cmd *cobra.Command, args []string) {
-		lib.NewConfig()
+		lib.CreateConfig()
 	},
 }

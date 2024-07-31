@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -15,22 +16,26 @@ var rootCmd = &cobra.Command{
 	Short:   "A CLI tool for memorizing things you've learned.",
 	Long:    "An interactive TUI that helps you learn by using techniques such as spaced repetition.",
 	Run: func(cmd *cobra.Command, args []string) {
-		config := lib.NewConfig()
-		db, err := lib.NewSqlite(config.Directory)
+		config := lib.InitConfig()
+		dir := config.Dir
+		dir.GetDir(false)
+		db, err := lib.NewSqlite(dir)
 		if err != nil {
 			log.Fatal("There was an error", err)
 		}
+		exists := db.SqlExists(dir)
+		fmt.Println(exists)
+
 		lib.InitServices(config, db)
 	},
 
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		var viperReadType string
-		if cfgFile != "" {
+		if CfgFile != "" {
 			viperReadType = "flag"
-			viper.SetConfigFile(cfgFile)
-
-			if configIsSaved {
-				lib.SaveConfig(cfgFile)
+			viper.SetConfigFile(CfgFile)
+			if ConfigIsSaved {
+				lib.OverrideConfigFile(CfgFile)
 				viper.SetConfigType("yaml")
 				viper.SetConfigName("config")
 				viper.AddConfigPath("$HOME/.config/anki-for-me")
@@ -59,9 +64,9 @@ var rootCmd = &cobra.Command{
 }
 
 var (
-	cfgFile       string
+	CfgFile       string
 	sqlFile       string
-	configIsSaved bool
+	ConfigIsSaved bool
 )
 
 func Execute() error {
@@ -69,6 +74,6 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/anki-for-me/config.yaml")
-	rootCmd.PersistentFlags().BoolVarP(&configIsSaved, "save", "s", false, "Using this flag will override your config file with the one you entered using --config")
+	rootCmd.PersistentFlags().StringVarP(&CfgFile, "config", "c", "", "config file (default is $HOME/.config/anki-for-me/config.yaml")
+	rootCmd.PersistentFlags().BoolVarP(&ConfigIsSaved, "save", "s", false, "Using this flag will override your config file with the one you entered using --config")
 }
